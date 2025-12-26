@@ -1,22 +1,52 @@
 name: Build luci-app-twofa
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target:
-          - x86/64
-          - ramips/mt7621
-          - aarch64/cortex-a53
-          - mipsel_24kc
+        include:
+          - target: x86/64
+            sdk_url: https://downloads.openwrt.org/releases/22.03.7/targets/x86/64/openwrt-sdk-22.03.7-x86-64_gcc-11.2.0_musl.Linux-x86_64.tar.xz
+          - target: aarch64/generic
+            sdk_url: https://downloads.openwrt.org/releases/22.03.7/targets/aarch64/generic/openwrt-sdk-22.03.7-aarch64-generic_gcc-11.2.0_musl.Linux-x86_64.tar.xz
+          - target: ramips/mt7621
+            sdk_url: https://downloads.openwrt.org/releases/22.03.7/targets/ramips/mt7621/openwrt-sdk-22.03.7-ramips-mt7621_gcc-11.2.0_musl.Linux-x86_64.tar.xz
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        uses: openwrt/action-builder@v6
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential ccache flex gawk git libncurses5-dev zlib1g-dev
+
+      - name: Download OpenWrt SDK
+        run: |
+          mkdir -p ~/sdk
+          wget -O ~/sdk/sdk.tar.xz "${{ matrix.sdk_url }}"
+          tar -xf ~/sdk/sdk.tar.xz -C ~/sdk --strip-components=1
+
+      - name: Copy plugin into SDK
+        run: |
+          cp -r . ~/sdk/package/luci-app-twofa
+
+      - name: Configure and build
+        working-directory: ~/sdk
+        run: |
+          make menuconfig > /dev/null 2>&1 || true
+          echo "CONFIG_PACKAGE_luci-app-twofa=y" >> .config
+          make defconfig
+          make package/luci-app-twofa/compile V=s
+
+      - name: Upload IPK artifact
+        uses: actions/upload-artifact@v4
         with:
-          target: ${{ matrix.target }}
-          packages: luci-app-twofa
-          sdk_version: 22.03
+          name: luci-app-twofa-${{ matrix.target }}
+          path: ~/sdk/bin/packages/**/luci/luci-app-twofa_*.ipk
