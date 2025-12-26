@@ -46,38 +46,39 @@ jobs:
           mkdir -p sdk
           tar --zstd -xf $file_name -C ./sdk --strip-components=1
 
-      - name: Integrate Plugin
+      - name: Integrate Plugin via Local Feed
         run: |
           cd sdk
-          # 物理创建目录并拷贝，确保不递归
-          mkdir -p package/luci-app-twofa
-          rsync -av --exclude='sdk' --exclude='.git' --exclude='.github' $GITHUB_WORKSPACE/ package/luci-app-twofa/
-          
-          # 【调试检查】强制打印 Makefile 前 5 行，确认文件没坏
-          echo "Checking Makefile content:"
-          head -n 5 package/luci-app-twofa/Makefile
-          
-          # 【核心杀招】强制建立软链接索引并更新
-          ./scripts/feeds update -i
-          make package/symlinks
+          # 1. 核心：将当前仓库添加为本地 Feed 源
+          echo "src-link local_twofa $GITHUB_WORKSPACE" > feeds.conf.default
+          # 2. 更新并强制安装
+          ./scripts/feeds update -a
+          ./scripts/feeds install -p local_twofa -f luci-app-twofa
+          # 安装必要的 LuCI 环境
+          ./scripts/feeds install luci-base qrencode luci-lib-jsonc libnixio
 
       - name: Configure and Compile
         run: |
           cd sdk
-          # 清理旧配置并写入
+          # 刷新索引
+          make package/symlinks
+          
+          # 清理并重写配置
           rm -f .config
           echo "CONFIG_PACKAGE_luci-app-twofa=m" > .config
           
-          # 尝试 defconfig
+          # 生成最终配置
           make defconfig
           
-          # 【二次确认】检查包是否真的被选中了
+          # 验证是否激活成功
           if ! grep -q "CONFIG_PACKAGE_luci-app-twofa=m" .config; then
-            echo "错误: 插件未能在配置中激活！可能是 Makefile 语法有误。"
+            echo "错误: 插件未能在配置中激活！请检查 Makefile 是否存在且格式正确。"
+            find package/feeds/local_twofa/ -maxdepth 2
             exit 1
           fi
 
-          # 开始编译
+          # 正式编译
+          echo "开始编译 luci-app-twofa..."
           make package/luci-app-twofa/compile -j$(nproc) V=s IGNORE_ERRORS=1
 
       - name: Collect IPK
