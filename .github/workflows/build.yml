@@ -11,18 +11,17 @@ jobs:
         include:
           # 官方提供 SDK 的架构
           - target: x86/64
-            sdk_url: https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+            sdk_url: https://downloads.openwrt.org/releases/24.10.4/targets/x86/64/openwrt-sdk-24.10.4-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
 
-          - target: ramips/mt7621
-            sdk_url: https://downloads.openwrt.org/releases/23.05.3/targets/ramips/mt7621/openwrt-sdk-23.05.3-ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          - target: aarch64_generic
+            sdk_url: https://downloads.openwrt.org/releases/24.10.4/targets/rockchip/armv8/openwrt-sdk-24.10.4-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
 
           # 官方无 SDK，使用 ImmortalWRT（23.05.3 兼容）
           - target: aarch64_cortex-a53
-            sdk_url: https://github.com/immortalwrt/immortalwrt/releases/download/openwrt-23.05.3-release/openwrt-sdk-23.05.3-aarch64-cortex-a53_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+            sdk_url: https://downloads.openwrt.org/releases/24.10.4/targets/mvebu/cortexa53/openwrt-sdk-24.10.4-mvebu-cortexa53_gcc-13.3.0_musl.Linux-x86_64.tar.zst
 
           - target: aarch64_cortex-a72
-            sdk_url: https://github.com/immortalwrt/immortalwrt/releases/download/openwrt-23.05.3-release/openwrt-sdk-23.05.3-aarch64-cortex-a72_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-
+            sdk_url: https://downloads.openwrt.org/releases/24.10.4/targets/mvebu/cortexa72/openwrt-sdk-24.10.4-mvebu-cortexa72_gcc-13.3.0_musl.Linux-x86_64.tar.zst
     steps:
       - uses: actions/checkout@v4
 
