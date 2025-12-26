@@ -57,13 +57,13 @@ jobs:
       matrix:
         target:
           - platform: "x86_64"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/x86/64/openwrt-sdk-24.10.0-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.4/targets/x86/64/openwrt-sdk-24.10.4-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           - platform: "aarch64_generic"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/aarch64/generic/openwrt-sdk-24.10.0-aarch64-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.4/targets/rockchip/armv8/openwrt-sdk-24.10.4-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           - platform: "arm_cortex-a9"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/bcm53xx/generic/openwrt-sdk-24.10.0-bcm53xx-generic_gcc-13.3.0_musl_eabi.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.4/targets/bcm53xx/generic/openwrt-sdk-24.10.4-bcm53xx-generic_gcc-13.3.0_musl_eabi.Linux-x86_64.tar.zst"
           - platform: "mips_24kc"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/ath79/generic/openwrt-sdk-24.10.0-ath79-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.4/targets/ath79/generic/openwrt-sdk-24.10.4-ath79-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
 
     steps:
       - name: Checkout
