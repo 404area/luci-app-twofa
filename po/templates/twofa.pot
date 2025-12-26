@@ -1,0 +1,46 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the luci-app-twofa package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-twofa\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-12-26 13:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: luasrc/model/cbi/admin_system/twofa.lua:10
+msgid "Two-Factor Authentication"
+msgstr ""
+
+#: luasrc/model/cbi/admin_system/twofa.lua:15
+msgid "Enable Two-Factor Authentication"
+msgstr ""
+
+#: luasrc/model/cbi/admin_system/twofa.lua:25
+msgid "Scan this QR code with Google or Microsoft Authenticator"
+msgstr ""
+
+#: luasrc/model/cbi/admin_system/twofa.lua:35
+msgid "Secret Key (Base32)"
+msgstr ""
+
+#: luasrc/model/cbi/admin_system/twofa_verify.lua:10
+msgid "Enter 6-digit code from your authenticator app"
+msgstr ""
+
+#: luasrc/model/cbi/admin_system/twofa_verify.lua:20
+msgid "Invalid code. Please try again."
+msgstr ""
+
+#: luasrc/model/cbi/admin_system/twofa_verify.lua:8
+msgid "Verify"
+msgstr ""
