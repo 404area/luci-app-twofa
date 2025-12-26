@@ -12,35 +12,46 @@ define Package/luci-app-twofa
   SECTION:=luci
   CATEGORY:=LuCI
   SUBMENU:=3. Applications
-  TITLE:=LuCI Support for Two-Factor Authentication (TOTP)
-  # 简化依赖：只保留核心，规避 libnixio 和 libuci 的版本冲突
-  DEPENDS:=+luci-base +qrencode +luci-lib-jsonc
+  TITLE:=Two-factor authentication for LuCI
+  DEPENDS:=+qrencode +nixio
   PKGARCH:=all
-endef
+end Package
 
 define Build/Compile
 endef
 
 define Package/luci-app-twofa/install
-	# 创建目录
+	# 创建系统目录
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/controller/admin/system
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/model/cbi/admin_system
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/twofa
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
+	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_DIR) $(1)/www/luci-static/resources
-	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n
 
-	# 拷贝文件
-	$(INSTALL_DATA) ./luasrc/controller/admin/system/twofa.lua $(1)/usr/lib/lua/luci/controller/admin/system/
-	$(INSTALL_DATA) ./luasrc/model/cbi/admin_system/twofa.lua $(1)/usr/lib/lua/luci/model/cbi/admin_system/
-	$(INSTALL_DATA) ./luasrc/usr/lib/luci/twofa/*.lua $(1)/usr/lib/lua/luci/twofa/
-	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/*.json $(1)/usr/share/luci/menu.d/
-	$(INSTALL_CONF) ./root/etc/config/twofa $(1)/etc/config/
-	$(INSTALL_DATA) ./htdocs/luci-static/resources/*.js $(1)/www/luci-static/resources/
+	# 安装 Lua 文件
+	$(CP) ./luasrc/controller/admin/system/*.lua $(1)/usr/lib/lua/luci/controller/admin/system/
+	$(CP) ./luasrc/model/cbi/admin_system/*.lua $(1)/usr/lib/lua/luci/model/cbi/admin_system/
+	$(CP) ./luasrc/usr/lib/luci/twofa/*.lua $(1)/usr/lib/lua/luci/twofa/
 
-	# 编译语言包 (如果环境中没有 po2lmo，这一步会静默跳过或报错，我们加个判断)
-	- [ -f ./po/zh_Hans/twofa.po ] && po2lmo ./po/zh_Hans/twofa.po $(1)/usr/lib/lua/luci/i18n/twofa.zh-cn.lmo
+	# 安装配置文件和菜单 JSON
+	$(CP) ./root/usr/share/luci/menu.d/*.json $(1)/usr/share/luci/menu.d/
+	$(CP) ./root/usr/share/rpcd/acl.d/*.json $(1)/usr/share/rpcd/acl.d/
+	$(CP) ./root/etc/config/twofa $(1)/etc/config/
+
+	# 安装静态 JS 文件 (Hook 调用的文件)
+	$(CP) ./htdocs/luci-static/resources/*.js $(1)/www/luci-static/resources/
+endef
+
+# 【关键步骤】安装后脚本：自动触发菜单刷新
+define Package/luci-app-twofa/postinst
+#!/bin/sh
+if [ -z "$${IPKG_INSTROOT}" ]; then
+	rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
+	/etc/init.d/rpcd restart
+fi
+exit 0
 endef
 
 $(eval $(call BuildPackage,luci-app-twofa))

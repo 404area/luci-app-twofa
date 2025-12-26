@@ -1,0 +1,20 @@
+{
+    "luci-app-twofa": {
+        "description": "Grant access to 2FA settings",
+        "read": {
+            "cgi-io": [ "download", "upload" ],
+            "file": {
+                "/etc/config/twofa": [ "read" ],
+                "/usr/lib/lua/luci/twofa/*": [ "read" ],
+                "/www/luci-static/resources/twofa.js": [ "read" ]
+            },
+            "uci": [ "twofa" ]
+        },
+        "write": {
+            "file": {
+                "/etc/config/twofa": [ "write" ]
+            },
+            "uci": [ "twofa" ]
+        }
+    }
+}

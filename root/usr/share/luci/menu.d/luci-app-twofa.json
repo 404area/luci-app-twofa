@@ -1,10 +1,10 @@
 {
-    "admin/system/twofa": {
-        "title": "2FA Settings",
+    "admin/services/twofa": {
+        "title": "Two-Factor Auth",
         "action": { "type": "cbi", "path": "admin_system/twofa" },
         "depends": { "acl": [ "luci-app-twofa" ] }
     },
-    "admin/system/twofa/hook": {
+    "admin/services/twofa/hook": {
         "action": { "type": "javascript", "script": "twofa.js" },
         "hidden": true
     }
