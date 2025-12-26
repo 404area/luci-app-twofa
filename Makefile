@@ -13,9 +13,9 @@ define Package/luci-app-twofa
   CATEGORY:=LuCI
   SUBMENU:=3. Applications
   TITLE:=Two-factor authentication for LuCI
-  DEPENDS:=+qrencode +nixio
+  DEPENDS:=+qrencode +nixio +luci-base
   PKGARCH:=all
-end Package
+endef
 
 define Build/Compile
 endef
@@ -40,11 +40,11 @@ define Package/luci-app-twofa/install
 	$(CP) ./root/usr/share/rpcd/acl.d/*.json $(1)/usr/share/rpcd/acl.d/
 	$(CP) ./root/etc/config/twofa $(1)/etc/config/
 
-	# 安装静态 JS 文件 (Hook 调用的文件)
+	# 安装静态 JS 文件
 	$(CP) ./htdocs/luci-static/resources/*.js $(1)/www/luci-static/resources/
 endef
 
-# 【关键步骤】安装后脚本：自动触发菜单刷新
+# 安装后脚本
 define Package/luci-app-twofa/postinst
 #!/bin/sh
 if [ -z "$${IPKG_INSTROOT}" ]; then
