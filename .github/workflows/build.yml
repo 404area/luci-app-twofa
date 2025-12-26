@@ -29,6 +29,8 @@ jobs:
         run: |
           sudo -E apt-get -qq update
           sudo -E apt-get -qq install build-essential libncurses-dev gawk git gettext libssl-dev xsltproc zip zlib1g-dev file zstd rsync python3-pyelftools
+          # 手动安装编译 lmo 的工具（如果 SDK 没带的话）
+          sudo -E apt-get -qq install lua5.1    
 
       - name: Download OpenWrt SDK
         run: |
