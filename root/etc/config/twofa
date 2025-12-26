@@ -1,0 +1,4 @@
+config twofa 'global'
+	option enabled '0'
+	option issuer 'OpenWrt'
+	option secret ''

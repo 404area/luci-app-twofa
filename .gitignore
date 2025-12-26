@@ -1,0 +1,21 @@
+# 编译产物（OpenWrt SDK 生成）
+bin/
+build_dir/
+staging_dir/
+tmp/
+logs/
+
+# IDEA / JetBrains IDE
+.idea/
+*.iml
+*.iws
+out/
+*.log
+
+# 其他编辑器
+.DS_Store
+.vscode/
+*.swp
+*~
+
+# 不要忽略 Makefile、README、luasrc 等源码！

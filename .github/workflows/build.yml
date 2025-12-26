@@ -1,0 +1,22 @@
+name: Build luci-app-twofa
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86/64
+          - ramips/mt7621
+          - aarch64/cortex-a53
+          - mipsel_24kc
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        uses: openwrt/action-builder@v6
+        with:
+          target: ${{ matrix.target }}
+          packages: luci-app-twofa
+          sdk_version: 22.03
