@@ -57,31 +57,20 @@ jobs:
 
       - name: Integrate Plugin
         run: |
-          cd sdk
-          # 1. 物理拷贝整个项目到 SDK 的 package 目录
-          mkdir -p package/luci-app-twofa
-          cp -af $GITHUB_WORKSPACE/* package/luci-app-twofa/
-          
-          # 2. 移除可能存在的 sdk 递归文件夹
-          rm -rf package/luci-app-twofa/sdk
-          
-          # 3. 强制刷新 SDK 索引 (关键步骤)
-          ./scripts/feeds update -i
-          ./scripts/feeds install -a
+          # 物理创建目录并使用 rsync 排除 sdk 自身，解决递归拷贝报错
+          mkdir -p $GITHUB_WORKSPACE/sdk/package/luci-app-twofa
+          rsync -av --exclude='sdk' --exclude='.git' $GITHUB_WORKSPACE/ $GITHUB_WORKSPACE/sdk/package/luci-app-twofa/
 
       - name: Configure and Compile
         run: |
-          cd sdk
-          # 4. 再次确认 Makefile 路径 (如果这一步报错，说明仓库结构不对)
-          if [ ! -f "package/luci-app-twofa/Makefile" ]; then
-            echo "错误: Makefile 路径不正确！"
-            ls -R package/luci-app-twofa
-            exit 1
-          fi
-
-          # 5. 写入配置并编译
+          cd $GITHUB_WORKSPACE/sdk
+          # 强效刷新索引
+          make package/symlinks
+          # 重建干净配置
+          rm -f .config
           echo "CONFIG_PACKAGE_luci-app-twofa=m" > .config
           make defconfig
+          # 执行编译
           make package/luci-app-twofa/compile -j$(nproc) V=s IGNORE_ERRORS=1
 
       - name: Collect IPK
