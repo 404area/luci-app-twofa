@@ -1,51 +1,184 @@
-name: Build luci-app-twofa
+#
+# Copyright (c) 2022-2025 luci-app-twofa
+# Description: Auto compile luci-app-twofa
+#
+name: "Auto compile luci-app-twofa"
 
-on: [push, pull_request]
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      ssh:
+        description: 'SSH connection to Actions'
+        required: false
+        default: 'false'
+  schedule:
+    - cron: '0 20 * * 5'  # 每周五晚上8点自动运行
+
+env:
+  TZ: Asia/Shanghai
 
 jobs:
-  build:
+  check_version:
+    name: Check for updates
+    runs-on: ubuntu-latest
+    outputs:
+      has_update: ${{ steps.check.outputs.has_update }}
+      current_version: ${{ steps.check.outputs.current_version }}
+      current_release: ${{ steps.check.outputs.current_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Get current version and release
+        id: check
+        run: |
+          cd $GITHUB_WORKSPACE
+          current_version=$(grep -Po 'PKG_VERSION:=\K.*' Makefile)
+          current_release=$(grep -Po 'PKG_RELEASE:=\K.*' Makefile)
+          echo "Current version: $current_version"
+          echo "Current release: $current_release"
+          echo "current_version=$current_version" >> $GITHUB_OUTPUT
+          echo "current_release=$current_release" >> $GITHUB_OUTPUT
+          
+          # 检查是否有更新（这里可以扩展为检查远程版本）
+          echo "has_update=true" >> $GITHUB_OUTPUT
+
+  build_packages:
+    name: Build luci-app-twofa [$ {{ matrix.target.platform }}]
+    needs: check_version
+    if: needs.check_version.outputs.has_update == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # 官方提供 SDK 的架构
-          - target: x86/64
-            sdk_url: https://downloads.openwrt.org/releases/24.10.4/targets/x86/64/openwrt-sdk-24.10.4-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+        target:
+          - platform: "x86_64"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/x86/64/openwrt-sdk-24.10.0-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+          - platform: "aarch64_generic"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/aarch64/generic/openwrt-sdk-24.10.0-aarch64-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+          - platform: "arm_cortex-a9"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/bcm53xx/generic/openwrt-sdk-24.10.0-bcm53xx-generic_gcc-13.3.0_musl_eabi.Linux-x86_64.tar.zst"
+          - platform: "mips_24kc"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/ath79/generic/openwrt-sdk-24.10.0-ath79-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
 
-          - target: aarch64_generic
-            sdk_url: https://downloads.openwrt.org/releases/24.10.4/targets/rockchip/armv8/openwrt-sdk-24.10.4-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-
-          # 官方无 SDK，使用 ImmortalWRT（23.05.3 兼容）
-          - target: aarch64_cortex-a53
-            sdk_url: https://downloads.openwrt.org/releases/24.10.4/targets/mvebu/cortexa53/openwrt-sdk-24.10.4-mvebu-cortexa53_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-
-          - target: aarch64_cortex-a72
-            sdk_url: https://downloads.openwrt.org/releases/24.10.4/targets/mvebu/cortexa72/openwrt-sdk-24.10.4-mvebu-cortexa72_gcc-13.3.0_musl.Linux-x86_64.tar.zst
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: sudo apt update && sudo apt install -y build-essential wget tar
-
-      - name: Download and extract SDK
+      - name: Initialization environment
         run: |
-          mkdir -p ~/sdk
-          wget -O sdk.tar.xz "${{ matrix.sdk_url }}"
-          tar -xf sdk.tar.xz -C ~/sdk --strip-components=1
+          echo "Initial system information"
+          df -h
+          free -h
+          
+          # 安装必要的包
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq install build-essential libncurses-dev gawk git gettext libssl-dev xsltproc zip zlib1g-dev file
 
-      - name: Copy plugin
-        run: cp -r . ~/sdk/package/luci-app-twofa
-
-      - name: Build
-        working-directory: ~/sdk
+      - name: Download OpenWrt SDK
         run: |
-          echo "CONFIG_PACKAGE_luci-app-twofa=y" >> .config
+          wget ${{ matrix.target.sdk_url }}
+          file_name=$(basename ${{ matrix.target.sdk_url }})
+          mkdir sdk
+          if [[ $file_name == *.tar.xz ]]; then
+            tar -xJf $file_name -C ./sdk --strip-components=1
+          elif [[ $file_name == *.tar.zst ]]; then
+            tar --zstd -x -f $file_name -C ./sdk --strip-components=1
+          else
+            echo "Unsupported file format: $file_name"
+            exit 1
+          fi
+          cd sdk
+
+          # 更新 feeds 配置
+          echo "src-link twofa $GITHUB_WORKSPACE" > feeds.conf
+          echo "src-git luci https://github.com/openwrt/luci.git;openwrt-24.10" >> feeds.conf
+          echo "src-git packages https://github.com/openwrt/packages.git;openwrt-24.10" >> feeds.conf
+          
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Copy luci-app-twofa to SDK
+        run: |
+          cd $GITHUB_WORKSPACE/sdk
+          mkdir -p package/twofa
+          cp -r $GITHUB_WORKSPACE/* package/twofa/
+          
+          # 验证文件已复制
+          ls -la package/twofa/
+
+      - name: Configure build
+        run: |
+          cd $GITHUB_WORKSPACE/sdk
+          echo "CONFIG_ALL_NONSHARED=n" > .config
+          echo "CONFIG_ALL_KMODS=n" >> .config
+          echo "CONFIG_ALL=n" >> .config
+          echo "CONFIG_AUTOREMOVE=n" >> .config
+          echo "CONFIG_PACKAGE_luci-app-twofa=m" >> .config
+          echo "CONFIG_PACKAGE_libubox=m" >> .config
+          echo "CONFIG_PACKAGE_libuci=m" >> .config
+          echo "CONFIG_PACKAGE_rpcd=m" >> .config
           make defconfig
-          make package/luci-app-twofa/compile V=s
 
-      - name: Upload artifact
+      - name: Compile luci-app-twofa
+        id: compile
+        run: |
+          cd $GITHUB_WORKSPACE/sdk
+          echo "开始编译 luci-app-twofa..."
+          make package/luci-app-twofa/{clean,compile} -j$(nproc) V=s
+          
+          # 检查编译结果
+          if [ -f "bin/packages/${{ matrix.target.platform }}/twofa/luci-app-twofa"*".ipk" ]; then
+            echo "编译成功"
+            mkdir -p $GITHUB_WORKSPACE/release
+            cp bin/packages/${{ matrix.target.platform }}/twofa/luci-app-twofa"*".ipk $GITHUB_WORKSPACE/release/
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "编译失败"
+            exit 1
+          fi
+
+      - name: Upload artifacts
+        if: steps.compile.outputs.status == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-twofa-${{ matrix.target }}
-          path: ~/sdk/bin/packages/**/luci/luci-app-twofa_*.ipk
+          name: luci-app-twofa-${{ matrix.target.platform }}
+          path: ${{ github.workspace }}/release/*.ipk
+
+  release:
+    name: Create Release
+    needs: [check_version, build_packages]
+    if: needs.check_version.outputs.has_update == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Display artifacts
+        run: |
+          ls -R ./artifacts
+
+      - name: Generate release tag
+        id: tag
+        run: |
+          echo "release_tag=$(date +%Y.%m.%d)-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "release_name=Release $(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          release_name: ${{ steps.tag.outputs.release_name }}
+          draft: false
+          prerelease: false
+          files: ./artifacts/**/luci-app-twofa*.ipk
