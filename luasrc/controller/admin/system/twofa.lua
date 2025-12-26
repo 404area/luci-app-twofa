@@ -1,5 +1,23 @@
 module("luci.controller.admin.system.twofa", package.seeall)
 
 function index()
-    entry({"admin", "system", "twofa"}, cbi("admin_system/twofa"), _("Two-Factor Authentication"), 90)
+    entry({"admin", "system", "twofa"}, cbi("admin_system/twofa"), _("2FA Settings"), 99)
+    entry({"admin", "system", "twofa", "status"}, call("action_status")).leaf = true
+    entry({"admin", "system", "twofa", "verify"}, call("action_verify")).leaf = true
+end
+
+function action_status()
+    local auth = require "luci.twofa.auth"
+    local sid = luci.http.getcookie("sysauth")
+    luci.http.prepare_content("application/json")
+    luci.http.write_json({enabled = auth.is_enabled(), verified = auth.is_verified(sid)})
+end
+
+function action_verify()
+    local auth = require "luci.twofa.auth"
+    local json = require "luci.jsonc"
+    local val = json.parse(luci.http.read_content() or "{}")
+    local sid = luci.http.getcookie("sysauth")
+    luci.http.prepare_content("application/json")
+    luci.http.write_json({success = auth.verify_token(sid, val.token)})
 end

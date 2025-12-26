@@ -1,13 +1,6 @@
-# SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
-# This file is distributed under the same license as the luci-app-twofa package.
-# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
-#
-#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: luci-app-twofa\n"
-"Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-12-26 13:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
@@ -17,30 +10,50 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: luasrc/model/cbi/admin_system/twofa.lua:10
 msgid "Two-Factor Authentication"
 msgstr ""
 
-#: luasrc/model/cbi/admin_system/twofa.lua:15
-msgid "Enable Two-Factor Authentication"
+msgid "Protect your router with TOTP-based 2FA (Google Authenticator, Authy, etc.)."
 msgstr ""
 
-#: luasrc/model/cbi/admin_system/twofa.lua:25
-msgid "Scan this QR code with Google or Microsoft Authenticator"
+msgid "Global Settings"
 msgstr ""
 
-#: luasrc/model/cbi/admin_system/twofa.lua:35
-msgid "Secret Key (Base32)"
+msgid "Enable 2FA"
 msgstr ""
 
-#: luasrc/model/cbi/admin_system/twofa_verify.lua:10
-msgid "Enter 6-digit code from your authenticator app"
+msgid "Enforce two-factor authentication for OpenWrt Web Interface."
 msgstr ""
 
-#: luasrc/model/cbi/admin_system/twofa_verify.lua:20
-msgid "Invalid code. Please try again."
+msgid "Secret Key"
 msgstr ""
 
-#: luasrc/model/cbi/admin_system/twofa_verify.lua:8
+msgid "Enter this key manually if you cannot scan the QR code."
+msgstr ""
+
+msgid "QR Code"
+msgstr ""
+
+msgid "Scan this with your authenticator app."
+msgstr ""
+
+msgid "Regenerate Secret"
+msgstr ""
+
+msgid "Check this and save to generate a new secret key. WARNING: Your old codes will stop working immediately."
+msgstr ""
+
+msgid "Error: 'qrencode' package is missing. Please install it to view QR Code."
+msgstr ""
+
+msgid "2FA Verification"
+msgstr ""
+
+msgid "Please enter your 6-digit TOTP code."
+msgstr ""
+
 msgid "Verify"
+msgstr ""
+
+msgid "Invalid Code"
 msgstr ""

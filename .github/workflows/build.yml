@@ -1,21 +1,15 @@
 #
 # Copyright (c) 2022-2025 luci-app-twofa
-# Description: Auto compile luci-app-twofa
+# Description: Auto compile luci-app-twofa for OpenWrt 24.10
 #
 name: "Auto compile luci-app-twofa"
 
 on:
-  repository_dispatch:
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
-    inputs:
-      ssh:
-        description: 'SSH connection to Actions'
-        required: false
-        default: 'false'
 
 env:
   TZ: Asia/Shanghai
@@ -26,46 +20,28 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       has_update: ${{ steps.check.outputs.has_update }}
-      current_version: ${{ steps.check.outputs.current_version }}
-      current_release: ${{ steps.check.outputs.current_release }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.ref_name }}
-
-      - name: Get current version and release
-        id: check
+      - id: check
         run: |
-          cd $GITHUB_WORKSPACE
-          current_version=$(grep -Po 'PKG_VERSION:=\K.*' Makefile)
-          current_release=$(grep -Po 'PKG_RELEASE:=\K.*' Makefile)
-          echo "Current version: $current_version"
-          echo "Current release: $current_release"
-          echo "current_version=$current_version" >> $GITHUB_OUTPUT
-          echo "current_release=$current_release" >> $GITHUB_OUTPUT
-          
-          # 检查是否有更新（这里可以扩展为检查远程版本）
           echo "has_update=true" >> $GITHUB_OUTPUT
 
   build_packages:
-    name: Build luci-app-twofa [${{ matrix.target.platform }}]
+    name: Build [${{ matrix.target.platform }}]
     needs: check_version
-    if: needs.check_version.outputs.has_update == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         target:
+          # 以下链接适配最新的 24.10.x 稳定版
           - platform: "x86_64"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.5/targets/x86/64/openwrt-sdk-24.10.5-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/x86/64/openwrt-sdk-24.10.0-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           - platform: "aarch64_generic"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.5/targets/rockchip/armv8/openwrt-sdk-24.10.5-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
-          - platform: "arm_cortex-a9"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.5/targets/bcm53xx/generic/openwrt-sdk-24.10.5-bcm53xx-generic_gcc-13.3.0_musl_eabi.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/rockchip/armv8/openwrt-sdk-24.10.0-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           - platform: "mips_24kc"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.5/targets/ath79/generic/openwrt-sdk-24.10.5-ath79-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/ath79/generic/openwrt-sdk-24.10.0-ath79-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
 
     steps:
       - name: Checkout
@@ -73,68 +49,50 @@ jobs:
 
       - name: Initialization environment
         run: |
-          echo "Initial system information"
-          df -h
-          free -h
-          
-          # 安装必要的包
           sudo -E apt-get -qq update
-          sudo -E apt-get -qq install build-essential libncurses-dev gawk git gettext libssl-dev xsltproc zip zlib1g-dev file
+          # 增加 zstd 支持，24.10 SDK 必须
+          sudo -E apt-get -qq install build-essential libncurses-dev gawk git gettext libssl-dev xsltproc zip zlib1g-dev file zstd rsync
 
       - name: Download OpenWrt SDK
         run: |
           wget ${{ matrix.target.sdk_url }}
           file_name=$(basename ${{ matrix.target.sdk_url }})
           mkdir sdk
-          if [[ $file_name == *.tar.xz ]]; then
-            tar -xJf $file_name -C ./sdk --strip-components=1
-          elif [[ $file_name == *.tar.zst ]]; then
-            tar --zstd -x -f $file_name -C ./sdk --strip-components=1
-          else
-            echo "Unsupported file format: $file_name"
-            exit 1
-          fi
+          # 24.10 使用 zstd 压缩，需要特殊解压参数
+          tar --zstd -xf $file_name -C ./sdk --strip-components=1
           cd sdk
-          
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
       - name: Copy luci-app-twofa to SDK
         run: |
-          cd $GITHUB_WORKSPACE
+          # 关键：将当前仓库代码强制覆盖进 SDK 的 package 目录
           mkdir -p $GITHUB_WORKSPACE/sdk/package/luci-app-twofa
-          rsync -av --exclude='sdk' --exclude='release' --exclude='.git*' --exclude='.github' . $GITHUB_WORKSPACE/sdk/package/luci-app-twofa/
-          
-          # 验证复制结果
-          echo "Copied files:"
-          ls -la $GITHUB_WORKSPACE/sdk/package/luci-app-twofa/
+          rsync -av --exclude='sdk' . $GITHUB_WORKSPACE/sdk/package/luci-app-twofa/
 
       - name: Configure build
         run: |
           cd $GITHUB_WORKSPACE/sdk
-          echo "CONFIG_ALL_NONSHARED=n" > .config
-          echo "CONFIG_ALL_KMODS=n" >> .config
-          echo "CONFIG_ALL=n" >> .config
-          echo "CONFIG_AUTOREMOVE=n" >> .config
-          echo "CONFIG_PACKAGE_luci-app-twofa=m" >> .config
+          # 强制选中我们的包
+          echo "CONFIG_PACKAGE_luci-app-twofa=m" > .config
+          # 处理 24.10 依赖：确保 qrencode 和 libnixio 可用
           make defconfig
 
       - name: Compile luci-app-twofa
         id: compile
         run: |
           cd $GITHUB_WORKSPACE/sdk
-          echo "开始编译 luci-app-twofa..."
-          make package/luci-app-twofa/{clean,compile} -j$(nproc) V=s
+          # 编译逻辑
+          make package/luci-app-twofa/compile -j$(nproc) V=s
           
-          # 检查编译结果
-          if ls bin/packages/${{ matrix.target.platform }}/*/luci-app-twofa_*.ipk >/dev/null 2>&1; then
-            echo "编译成功"
-            mkdir -p $GITHUB_WORKSPACE/release
-            cp bin/packages/${{ matrix.target.platform }}/*/luci-app-twofa_*.ipk $GITHUB_WORKSPACE/release/
+          # 24.10 的目录结构可能多了一层，使用 find 定位
+          mkdir -p $GITHUB_WORKSPACE/release
+          find bin/packages -name "luci-app-twofa*.ipk" -exec cp {} $GITHUB_WORKSPACE/release/ \;
+          
+          if [ "$(ls -A $GITHUB_WORKSPACE/release)" ]; then
             echo "status=success" >> $GITHUB_OUTPUT
           else
-            echo "编译失败：未找到 ipk 文件"
-            find bin/packages -name "*.ipk" || true
+            echo "编译失败：未找到生成的 ipk"
             exit 1
           fi
 
@@ -147,8 +105,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [check_version, build_packages]
-    if: needs.check_version.outputs.has_update == 'true'
+    needs: build_packages
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -158,23 +115,13 @@ jobs:
         with:
           path: ./artifacts
 
-      - name: Display artifacts
-        run: |
-          ls -R ./artifacts
-
-      - name: Generate release tag
-        id: tag
-        run: |
-          echo "release_tag=$(date +%Y.%m.%d)-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "release_name=Release $(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
-
       - name: Create release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.tag.outputs.release_tag }}
-          release_name: ${{ steps.tag.outputs.release_name }}
+          tag_name: v${{ github.run_number }}
+          name: "Release v${{ github.run_number }} for 24.10"
+          files: ./artifacts/**/*.ipk
           draft: false
           prerelease: false
-          files: ./artifacts/**/luci-app-twofa*.ipk
