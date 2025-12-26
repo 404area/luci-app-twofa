@@ -6,14 +6,16 @@ name: "Auto compile luci-app-twofa"
 
 on:
   repository_dispatch:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
   workflow_dispatch:
     inputs:
       ssh:
         description: 'SSH connection to Actions'
         required: false
         default: 'false'
-  schedule:
-    - cron: '0 20 * * 5'  # 每周五晚上8点自动运行
 
 env:
   TZ: Asia/Shanghai
@@ -104,12 +106,12 @@ jobs:
 
       - name: Copy luci-app-twofa to SDK
         run: |
-          cd $GITHUB_WORKSPACE/sdk
-          mkdir -p package/twofa
-          cp -r $GITHUB_WORKSPACE/* package/twofa/
+          cd $GITHUB_WORKSPACE
+          # 确保只复制项目文件，而不是整个工作目录
+          rsync -av --exclude='sdk' --exclude='release' . $GITHUB_WORKSPACE/sdk/package/twofa/
           
           # 验证文件已复制
-          ls -la package/twofa/
+          ls -la $GITHUB_WORKSPACE/sdk/package/twofa/
 
       - name: Configure build
         run: |
