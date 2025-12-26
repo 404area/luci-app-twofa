@@ -50,7 +50,7 @@ jobs:
           echo "has_update=true" >> $GITHUB_OUTPUT
 
   build_packages:
-    name: Build luci-app-twofa [$ {{ matrix.target.platform }}]
+    name: Build luci-app-twofa [${{ matrix.target.platform }}]
     needs: check_version
     if: needs.check_version.outputs.has_update == 'true'
     runs-on: ubuntu-latest
@@ -59,13 +59,13 @@ jobs:
       matrix:
         target:
           - platform: "x86_64"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.4/targets/x86/64/openwrt-sdk-24.10.4-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.5/targets/x86/64/openwrt-sdk-24.10.5-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           - platform: "aarch64_generic"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.4/targets/rockchip/armv8/openwrt-sdk-24.10.4-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.5/targets/rockchip/armv8/openwrt-sdk-24.10.5-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           - platform: "arm_cortex-a9"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.4/targets/bcm53xx/generic/openwrt-sdk-24.10.4-bcm53xx-generic_gcc-13.3.0_musl_eabi.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.5/targets/bcm53xx/generic/openwrt-sdk-24.10.5-bcm53xx-generic_gcc-13.3.0_musl_eabi.Linux-x86_64.tar.zst"
           - platform: "mips_24kc"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.4/targets/ath79/generic/openwrt-sdk-24.10.4-ath79-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+            sdk_url: "https://downloads.openwrt.org/releases/24.10.5/targets/ath79/generic/openwrt-sdk-24.10.5-ath79-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
 
     steps:
       - name: Checkout
@@ -95,11 +95,6 @@ jobs:
             exit 1
           fi
           cd sdk
-
-          # 更新 feeds 配置
-          echo "src-link twofa $GITHUB_WORKSPACE" > feeds.conf
-          echo "src-git luci https://github.com/openwrt/luci.git;openwrt-24.10" >> feeds.conf
-          echo "src-git packages https://github.com/openwrt/packages.git;openwrt-24.10" >> feeds.conf
           
           ./scripts/feeds update -a
           ./scripts/feeds install -a
@@ -107,11 +102,12 @@ jobs:
       - name: Copy luci-app-twofa to SDK
         run: |
           cd $GITHUB_WORKSPACE
-          # 确保只复制项目文件，而不是整个工作目录
-          rsync -av --exclude='sdk' --exclude='release' . $GITHUB_WORKSPACE/sdk/package/twofa/
+          mkdir -p $GITHUB_WORKSPACE/sdk/package/luci-app-twofa
+          rsync -av --exclude='sdk' --exclude='release' --exclude='.git*' --exclude='.github' . $GITHUB_WORKSPACE/sdk/package/luci-app-twofa/
           
-          # 验证文件已复制
-          ls -la $GITHUB_WORKSPACE/sdk/package/twofa/
+          # 验证复制结果
+          echo "Copied files:"
+          ls -la $GITHUB_WORKSPACE/sdk/package/luci-app-twofa/
 
       - name: Configure build
         run: |
@@ -121,9 +117,6 @@ jobs:
           echo "CONFIG_ALL=n" >> .config
           echo "CONFIG_AUTOREMOVE=n" >> .config
           echo "CONFIG_PACKAGE_luci-app-twofa=m" >> .config
-          echo "CONFIG_PACKAGE_libubox=m" >> .config
-          echo "CONFIG_PACKAGE_libuci=m" >> .config
-          echo "CONFIG_PACKAGE_rpcd=m" >> .config
           make defconfig
 
       - name: Compile luci-app-twofa
@@ -134,13 +127,14 @@ jobs:
           make package/luci-app-twofa/{clean,compile} -j$(nproc) V=s
           
           # 检查编译结果
-          if [ -f "bin/packages/${{ matrix.target.platform }}/twofa/luci-app-twofa"*".ipk" ]; then
+          if ls bin/packages/${{ matrix.target.platform }}/*/luci-app-twofa_*.ipk >/dev/null 2>&1; then
             echo "编译成功"
             mkdir -p $GITHUB_WORKSPACE/release
-            cp bin/packages/${{ matrix.target.platform }}/twofa/luci-app-twofa"*".ipk $GITHUB_WORKSPACE/release/
+            cp bin/packages/${{ matrix.target.platform }}/*/luci-app-twofa_*.ipk $GITHUB_WORKSPACE/release/
             echo "status=success" >> $GITHUB_OUTPUT
           else
-            echo "编译失败"
+            echo "编译失败：未找到 ipk 文件"
+            find bin/packages -name "*.ipk" || true
             exit 1
           fi
 
