@@ -1,13 +1,7 @@
-#
-# Copyright (c) 2022-2025 luci-app-twofa
-# Description: Auto compile luci-app-twofa (Optimized for OpenWrt 24.10)
-#
 name: "Auto compile luci-app-twofa"
 
 on:
   push:
-    branches: [main, master]
-  pull_request:
     branches: [main, master]
   workflow_dispatch:
 
@@ -26,8 +20,6 @@ jobs:
             sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/x86/64/openwrt-sdk-24.10.0-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
           - platform: "aarch64_generic"
             sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/rockchip/armv8/openwrt-sdk-24.10.0-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
-          - platform: "mips_24kc"
-            sdk_url: "https://downloads.openwrt.org/releases/24.10.0/targets/ath79/generic/openwrt-sdk-24.10.0-ath79-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
 
     steps:
       - name: Checkout
@@ -36,82 +28,62 @@ jobs:
       - name: Initialization environment
         run: |
           sudo -E apt-get -qq update
-          # 补全 python3-pyelftools 和其他 24.10 编译必须的依赖
-          sudo -E apt-get -qq install build-essential libncurses-dev gawk git gettext libssl-dev xsltproc zip zlib1g-dev file zstd rsync python3-pyelftools python3-setuptools python3-dev swig
-          sudo -E apt-get -qq autoremove --purge
-          sudo -E apt-get -qq clean
+          sudo -E apt-get -qq install build-essential libncurses-dev gawk git gettext libssl-dev xsltproc zip zlib1g-dev file zstd rsync python3-pyelftools
+
+      # --- 缓存逻辑开始 ---
+      - name: Cache SDK
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: sdk
+          key: sdk-${{ matrix.target.platform }}-${{ hashFiles('Makefile') }}
+          restore-keys: |
+            sdk-${{ matrix.target.platform }}-
 
       - name: Download OpenWrt SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
-          wget ${{ matrix.target.sdk_url }}
+          wget -q ${{ matrix.target.sdk_url }}
           file_name=$(basename ${{ matrix.target.sdk_url }})
-          mkdir sdk
+          mkdir -p sdk
           tar --zstd -xf $file_name -C ./sdk --strip-components=1
+      # --- 缓存逻辑结束 ---
+
+      - name: Update Feeds
+        run: |
           cd sdk
-          # 只更新核心 feeds，避免加载过多无关包
           ./scripts/feeds update -a
-          # 仅安装插件及其核心依赖，避免触发 u-boot 等包的 prereq 检查
           ./scripts/feeds install luci-base luci-lib-jsonc qrencode libnixio
 
-      - name: Copy luci-app-twofa to SDK
+      - name: Integrate Plugin
         run: |
-          mkdir -p $GITHUB_WORKSPACE/sdk/package/luci-app-twofa
-          # 使用 rsync 干净地同步源码
-          rsync -av --exclude='sdk' --exclude='.git' --exclude='.github' . $GITHUB_WORKSPACE/sdk/package/luci-app-twofa/
+          # 强制清理旧的链接并建立新链接
+          rm -rf $GITHUB_WORKSPACE/sdk/package/luci-app-twofa
+          ln -s $GITHUB_WORKSPACE $GITHUB_WORKSPACE/sdk/package/luci-app-twofa
+          cd sdk
+          ./scripts/feeds update -i
 
-      - name: Configure build
+      - name: Configure and Compile
         run: |
-          cd $GITHUB_WORKSPACE/sdk
-          # 强制写入配置
+          cd sdk
+          # 构造最小化配置
           echo "CONFIG_PACKAGE_luci-app-twofa=m" > .config
-          # 让 SDK 处理依赖关系并生成 .config
           make defconfig
-
-      - name: Compile luci-app-twofa
-        id: compile
-        run: |
-          cd $GITHUB_WORKSPACE/sdk
-          echo "Starting compilation..."
-          # 使用 IGNORE_ERRORS=1 跳过由于 SDK 自带的其他包（如 u-boot）导致的 prereq 失败
+          
+          # 核心编译指令
           make package/luci-app-twofa/compile -j$(nproc) V=s IGNORE_ERRORS=1
-          
-          # 搜寻生成的 ipk
+
+      - name: Collect IPK
+        run: |
           mkdir -p $GITHUB_WORKSPACE/release
-          find bin/packages -name "luci-app-twofa*.ipk" -exec cp {} $GITHUB_WORKSPACE/release/ \;
-          
-          if [ "$(ls -A $GITHUB_WORKSPACE/release)" ]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-          else
-            echo "Error: IPK not found!"
+          find $GITHUB_WORKSPACE/sdk/bin/packages -name "luci-app-twofa*.ipk" -exec cp {} $GITHUB_WORKSPACE/release/ \;
+          if [ -z "$(ls -A $GITHUB_WORKSPACE/release)" ]; then
+            echo "错误：未生成 IPK 文件，请检查 Makefile 是否有误。"
             exit 1
           fi
 
-      - name: Upload artifacts
-        if: steps.compile.outputs.status == 'success'
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: luci-app-twofa-${{ matrix.target.platform }}
           path: ${{ github.workspace }}/release/*.ipk
-
-  release:
-    name: Create Release
-    needs: build_packages
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ github.run_number }}
-          name: "Release v${{ github.run_number }} (OpenWrt 24.10)"
-          files: ./artifacts/**/*.ipk
-          draft: false
-          prerelease: false
