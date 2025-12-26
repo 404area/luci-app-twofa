@@ -30,55 +30,52 @@ jobs:
           sudo -E apt-get -qq update
           sudo -E apt-get -qq install build-essential libncurses-dev gawk git gettext libssl-dev xsltproc zip zlib1g-dev file zstd rsync python3-pyelftools
 
-      - name: Cache SDK
-        id: cache-sdk
-        uses: actions/cache@v4
-        with:
-          path: sdk
-          key: sdk-${{ matrix.target.platform }}-${{ hashFiles('Makefile') }}
-          restore-keys: sdk-${{ matrix.target.platform }}-
-
       - name: Download OpenWrt SDK
-        if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
+          # 禁用缓存，确保每次都是干净的环境，排除干扰
           wget -q ${{ matrix.target.sdk_url }}
           file_name=$(basename ${{ matrix.target.sdk_url }})
           mkdir -p sdk
           tar --zstd -xf $file_name -C ./sdk --strip-components=1
-
-      - name: Integrate Plugin via Local Feed
-        run: |
           cd sdk
-          # 1. 核心：将当前仓库添加为本地 Feed 源
-          echo "src-link local_twofa $GITHUB_WORKSPACE" > feeds.conf.default
-          # 2. 更新并强制安装
           ./scripts/feeds update -a
-          ./scripts/feeds install -p local_twofa -f luci-app-twofa
-          # 安装必要的 LuCI 环境
-          ./scripts/feeds install luci-base qrencode luci-lib-jsonc libnixio
+          ./scripts/feeds install -a
+
+      - name: Force Inject Plugin
+        run: |
+          # 1. 强行在 SDK 的基础包目录下创建文件夹
+          mkdir -p $GITHUB_WORKSPACE/sdk/package/luci-app-twofa
+          
+          # 2. 物理拷贝，排除所有干扰项
+          rsync -av --exclude='sdk' --exclude='.git' --exclude='.github' $GITHUB_WORKSPACE/ $GITHUB_WORKSPACE/sdk/package/luci-app-twofa/
+          
+          # 3. 调试验证：打印 Makefile 路径
+          echo "Makefile is located at:"
+          find $GITHUB_WORKSPACE/sdk/package/luci-app-twofa -name "Makefile"
 
       - name: Configure and Compile
         run: |
-          cd sdk
-          # 刷新索引
-          make package/symlinks
+          cd $GITHUB_WORKSPACE/sdk
           
-          # 清理并重写配置
-          rm -f .config
+          # 4. 暴力清理并强制刷新
+          rm -rf tmp
+          ./scripts/feeds install qrencode luci-base luci-lib-jsonc libnixio
+          
+          # 5. 核心：强制重写 .config
           echo "CONFIG_PACKAGE_luci-app-twofa=m" > .config
           
-          # 生成最终配置
+          # 6. 使用 noconfirm 模式
           make defconfig
           
-          # 验证是否激活成功
+          # 7. 再次确认激活状态
           if ! grep -q "CONFIG_PACKAGE_luci-app-twofa=m" .config; then
-            echo "错误: 插件未能在配置中激活！请检查 Makefile 是否存在且格式正确。"
-            find package/feeds/local_twofa/ -maxdepth 2
+            echo "错误: 插件依然未能在配置中激活！"
+            echo "当前 package 目录下的文件结构："
+            ls -R package/luci-app-twofa
             exit 1
           fi
 
-          # 正式编译
-          echo "开始编译 luci-app-twofa..."
+          # 8. 编译
           make package/luci-app-twofa/compile -j$(nproc) V=s IGNORE_ERRORS=1
 
       - name: Collect IPK
