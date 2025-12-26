@@ -30,15 +30,13 @@ jobs:
           sudo -E apt-get -qq update
           sudo -E apt-get -qq install build-essential libncurses-dev gawk git gettext libssl-dev xsltproc zip zlib1g-dev file zstd rsync python3-pyelftools
 
-      # --- 缓存逻辑开始 ---
       - name: Cache SDK
         id: cache-sdk
         uses: actions/cache@v4
         with:
           path: sdk
           key: sdk-${{ matrix.target.platform }}-${{ hashFiles('Makefile') }}
-          restore-keys: |
-            sdk-${{ matrix.target.platform }}-
+          restore-keys: sdk-${{ matrix.target.platform }}-
 
       - name: Download OpenWrt SDK
         if: steps.cache-sdk.outputs.cache-hit != 'true'
@@ -47,30 +45,39 @@ jobs:
           file_name=$(basename ${{ matrix.target.sdk_url }})
           mkdir -p sdk
           tar --zstd -xf $file_name -C ./sdk --strip-components=1
-      # --- 缓存逻辑结束 ---
-
-      - name: Update Feeds
-        run: |
-          cd sdk
-          ./scripts/feeds update -a
-          ./scripts/feeds install luci-base luci-lib-jsonc qrencode libnixio
 
       - name: Integrate Plugin
         run: |
-          # 物理创建目录并使用 rsync 排除 sdk 自身，解决递归拷贝报错
-          mkdir -p $GITHUB_WORKSPACE/sdk/package/luci-app-twofa
-          rsync -av --exclude='sdk' --exclude='.git' $GITHUB_WORKSPACE/ $GITHUB_WORKSPACE/sdk/package/luci-app-twofa/
+          cd sdk
+          # 物理创建目录并拷贝，确保不递归
+          mkdir -p package/luci-app-twofa
+          rsync -av --exclude='sdk' --exclude='.git' --exclude='.github' $GITHUB_WORKSPACE/ package/luci-app-twofa/
+          
+          # 【调试检查】强制打印 Makefile 前 5 行，确认文件没坏
+          echo "Checking Makefile content:"
+          head -n 5 package/luci-app-twofa/Makefile
+          
+          # 【核心杀招】强制建立软链接索引并更新
+          ./scripts/feeds update -i
+          make package/symlinks
 
       - name: Configure and Compile
         run: |
-          cd $GITHUB_WORKSPACE/sdk
-          # 强效刷新索引
-          make package/symlinks
-          # 重建干净配置
+          cd sdk
+          # 清理旧配置并写入
           rm -f .config
           echo "CONFIG_PACKAGE_luci-app-twofa=m" > .config
+          
+          # 尝试 defconfig
           make defconfig
-          # 执行编译
+          
+          # 【二次确认】检查包是否真的被选中了
+          if ! grep -q "CONFIG_PACKAGE_luci-app-twofa=m" .config; then
+            echo "错误: 插件未能在配置中激活！可能是 Makefile 语法有误。"
+            exit 1
+          fi
+
+          # 开始编译
           make package/luci-app-twofa/compile -j$(nproc) V=s IGNORE_ERRORS=1
 
       - name: Collect IPK
@@ -78,7 +85,7 @@ jobs:
           mkdir -p $GITHUB_WORKSPACE/release
           find $GITHUB_WORKSPACE/sdk/bin/packages -name "luci-app-twofa*.ipk" -exec cp {} $GITHUB_WORKSPACE/release/ \;
           if [ -z "$(ls -A $GITHUB_WORKSPACE/release)" ]; then
-            echo "错误：未生成 IPK 文件，请检查 Makefile 是否有误。"
+            echo "错误：未生成 IPK 文件。"
             exit 1
           fi
 
