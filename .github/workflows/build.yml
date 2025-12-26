@@ -32,7 +32,6 @@ jobs:
 
       - name: Download OpenWrt SDK
         run: |
-          # 禁用缓存，确保每次都是干净的环境，排除干扰
           wget -q ${{ matrix.target.sdk_url }}
           file_name=$(basename ${{ matrix.target.sdk_url }})
           mkdir -p sdk
@@ -41,41 +40,42 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Force Inject Plugin
+      - name: Clean and Inject Plugin
         run: |
-          # 1. 强行在 SDK 的基础包目录下创建文件夹
-          mkdir -p $GITHUB_WORKSPACE/sdk/package/luci-app-twofa
+          # 1. 创建干净的目录
+          DEST="$GITHUB_WORKSPACE/sdk/package/luci-app-twofa"
+          mkdir -p $DEST
           
-          # 2. 物理拷贝，排除所有干扰项
-          rsync -av --exclude='sdk' --exclude='.git' --exclude='.github' $GITHUB_WORKSPACE/ $GITHUB_WORKSPACE/sdk/package/luci-app-twofa/
+          # 2. 仅拷贝必要文件，彻底排除 SDK 压缩包等垃圾文件
+          cp -r Makefile luasrc root htdocs po $DEST/ 2>/dev/null || true
           
-          # 3. 调试验证：打印 Makefile 路径
-          echo "Makefile is located at:"
-          find $GITHUB_WORKSPACE/sdk/package/luci-app-twofa -name "Makefile"
+          # 3. 彻底删除可能存在的干扰项
+          find $DEST -name "*.zst" -delete
+          find $DEST -name "*.iml" -delete
+          
+          # 4. 打印 Makefile 确认位置
+          ls -l $DEST/Makefile
 
       - name: Configure and Compile
         run: |
           cd $GITHUB_WORKSPACE/sdk
           
-          # 4. 暴力清理并强制刷新
+          # 刷新索引
           rm -rf tmp
-          ./scripts/feeds install qrencode luci-base luci-lib-jsonc libnixio
+          make package/symlinks
           
-          # 5. 核心：强制重写 .config
+          # 强行激活
           echo "CONFIG_PACKAGE_luci-app-twofa=m" > .config
-          
-          # 6. 使用 noconfirm 模式
           make defconfig
           
-          # 7. 再次确认激活状态
+          # 检查结果
           if ! grep -q "CONFIG_PACKAGE_luci-app-twofa=m" .config; then
-            echo "错误: 插件依然未能在配置中激活！"
-            echo "当前 package 目录下的文件结构："
-            ls -R package/luci-app-twofa
+            echo "错误: 插件依然无法激活。正在检查 Makefile 内容..."
+            cat package/luci-app-twofa/Makefile
             exit 1
           fi
 
-          # 8. 编译
+          # 编译
           make package/luci-app-twofa/compile -j$(nproc) V=s IGNORE_ERRORS=1
 
       - name: Collect IPK
@@ -83,7 +83,7 @@ jobs:
           mkdir -p $GITHUB_WORKSPACE/release
           find $GITHUB_WORKSPACE/sdk/bin/packages -name "luci-app-twofa*.ipk" -exec cp {} $GITHUB_WORKSPACE/release/ \;
           if [ -z "$(ls -A $GITHUB_WORKSPACE/release)" ]; then
-            echo "错误：未生成 IPK 文件。"
+            echo "未发现生成的 IPK"
             exit 1
           fi
 
