@@ -1,9 +1,9 @@
 module("luci.controller.admin.system.twofa", package.seeall)
 
 function index()
-    entry({"admin", "system", "twofa"}, cbi("admin_system/twofa"), _("2FA Settings"), 99)
-    entry({"admin", "system", "twofa", "status"}, call("action_status")).leaf = true
-    entry({"admin", "system", "twofa", "verify"}, call("action_verify")).leaf = true
+    entry({"admin", "services", "twofa"}, cbi("admin_system/twofa"), _("2FA Settings"), 99)
+    entry({"admin", "services", "twofa", "status"}, call("action_status")).leaf = true
+    entry({"admin", "services", "twofa", "verify"}, call("action_verify")).leaf = true
 end
 
 function action_status()

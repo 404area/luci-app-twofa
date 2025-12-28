@@ -5,7 +5,7 @@
 document.addEventListener('luci-loaded', function() {
     function check() {
         if (!L.sessionid) return;
-        L.Request.get(L.url('admin/system/twofa/status'), null, function(xhr, data) {
+        L.Request.get(L.url('admin/services/twofa/status'), null, function(xhr, data) {
             if (data && data.enabled && !data.verified) show();
         });
     }
@@ -27,7 +27,7 @@ document.addEventListener('luci-loaded', function() {
 
     function verify() {
         var t = document.getElementById('twofa-token').value;
-        L.Request.post(L.url('admin/system/twofa/verify'), {token: t}, function(xhr, data) {
+        L.Request.post(L.url('admin/services/twofa/verify'), {token: t}, function(xhr, data) {
             if (data.success) { ui.hideModal(); location.reload(); }
             else { alert('Invalid Code'); document.getElementById('twofa-token').value = ''; }
         });
