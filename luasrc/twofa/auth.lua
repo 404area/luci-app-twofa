@@ -28,4 +28,17 @@ function M.verify_token(sid, token)
     return false
 end
 
+-- 新增：后端拦截检查器
+-- 可以在其他 Controller 中调用此函数来强制检查
+function M.check_access(dsp)
+    local sid = dsp.context.authsession
+    if M.is_enabled() and not M.is_verified(sid) then
+        luci.http.status(403, "Forbidden")
+        luci.http.write("Access Denied: Two-Factor Authentication Required")
+        luci.http.close()
+        return false
+    end
+    return true
+end
+
 return M

@@ -2,36 +2,88 @@
 'require ui';
 'require rpc';
 
-document.addEventListener('luci-loaded', function() {
+// 确保在 DOM 加载完成后执行，兼容不同的 LuCI 版本加载机制
+// 注意：luci-loaded 事件可能在脚本加载前已经触发，所以直接执行 check
+// 或者使用 window.onload 作为后备
+
+function initTwoFA() {
+    // 避免重复初始化
+    if (window._twofa_initialized) return;
+    window._twofa_initialized = true;
+
     function check() {
-        if (!L.sessionid) return;
+        // 检查 L 对象是否存在，这是 LuCI JS 框架的核心
+        if (typeof L === 'undefined' || !L.sessionid) {
+            // 如果 L 未就绪，稍后重试
+            setTimeout(check, 500);
+            return;
+        }
+
         L.Request.get(L.url('admin/services/twofa/status'), null, function(xhr, data) {
-            if (data && data.enabled && !data.verified) show();
+            if (data && data.enabled && !data.verified) {
+                show();
+            }
         });
     }
 
     function show() {
         if (document.getElementById('twofa-lock')) return;
-        var body = E('div', {'class': 'cbi-map'}, [
-            E('p', {}, 'Please enter your 6-digit TOTP code.'),
-            E('input', {'type': 'text', 'id': 'twofa-token', 'class': 'cbi-input-text', 'style': 'width:100%;text-align:center;font-size:20px;'})
-        ]);
-        ui.showModal('2FA Verification', body);
+        
+        // 使用更通用的 DOM 创建方式，防止 E 函数不可用
+        var body = document.createElement('div');
+        body.className = 'cbi-map';
+        body.innerHTML = '<p>Please enter your 6-digit TOTP code.</p>' +
+                         '<input type="text" id="twofa-token" class="cbi-input-text" style="width:100%;text-align:center;font-size:20px;" autocomplete="off" />';
+
+        // 尝试使用 ui.showModal，如果失败则回退到简单的 alert/prompt 或者自定义遮罩
+        if (ui && ui.showModal) {
+            ui.showModal('2FA Verification', body);
+        } else {
+            console.error("LuCI ui library not found");
+            return;
+        }
+
         var m = document.querySelector('.modal');
-        if (m) { m.id = 'twofa-lock'; m.style.zIndex = "3000"; m.querySelector('.close').style.display = 'none'; }
-        document.getElementById('twofa-token').focus();
-        document.getElementById('twofa-token').onkeypress = function(e){ if(e.key === 'Enter') verify(); };
-        var btn = document.querySelector('.modal .cbi-button-primary') || document.querySelector('.modal .cbi-button-apply');
+        if (m) { 
+            m.id = 'twofa-lock'; 
+            m.style.zIndex = "9999"; // 提高层级
+            var closeBtn = m.querySelector('.close');
+            if (closeBtn) closeBtn.style.display = 'none'; 
+        }
+        
+        var input = document.getElementById('twofa-token');
+        if (input) {
+            input.focus();
+            input.onkeypress = function(e){ if(e.key === 'Enter') verify(); };
+        }
+
+        var btn = document.querySelector('.modal .cbi-button-primary') || document.querySelector('.modal .cbi-button-apply') || document.querySelector('.modal .btn-primary');
         if(btn) btn.onclick = verify;
     }
 
     function verify() {
-        var t = document.getElementById('twofa-token').value;
+        var input = document.getElementById('twofa-token');
+        if (!input) return;
+        var t = input.value;
+        
         L.Request.post(L.url('admin/services/twofa/verify'), {token: t}, function(xhr, data) {
-            if (data.success) { ui.hideModal(); location.reload(); }
-            else { alert('Invalid Code'); document.getElementById('twofa-token').value = ''; }
+            if (data && data.success) { 
+                if (ui && ui.hideModal) ui.hideModal(); 
+                location.reload(); 
+            } else { 
+                alert('Invalid Code'); 
+                input.value = ''; 
+                input.focus();
+            }
         });
     }
 
     check();
-});
+}
+
+// 尝试多种方式挂载
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTwoFA);
+} else {
+    initTwoFA();
+}

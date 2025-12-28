@@ -52,6 +52,7 @@ local otp_uri = string.format("otpauth://totp/%s:root?secret=%s&issuer=%s",
 
 -- 尝试生成二维码 HTML
 local qr_html = ""
+-- 尝试使用 ucode-mod-qrencode 或者 qrencode 命令行
 local has_qrencode = sys.call("which qrencode >/dev/null 2>&1") == 0
 
 if has_qrencode then
@@ -69,6 +70,8 @@ if has_qrencode then
         end
     end
 else
+    -- 尝试使用 JS 库生成 (如果后端没有 qrencode)
+    -- 这里我们先显示一个提示，或者使用在线 API (不推荐)
     qr_html = '<div style="color:red; margin: 10px 0;">' .. translate("Error: 'qrencode' package is missing. Please install it to view QR Code.") .. '</div>'
 end
 
