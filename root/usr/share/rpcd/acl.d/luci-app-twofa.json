@@ -15,6 +15,9 @@
                 "/etc/config/twofa": [ "write" ]
             },
             "uci": [ "twofa" ]
+        },
+        "access-group": {
+            "group": [ "read", "write" ]
         }
     }
 }

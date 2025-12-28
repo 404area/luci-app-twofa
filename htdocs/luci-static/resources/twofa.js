@@ -19,7 +19,12 @@ function initTwoFA() {
             return;
         }
 
+        // 增加错误处理，避免 uci/get 失败导致脚本崩溃
         L.Request.get(L.url('admin/services/twofa/status'), null, function(xhr, data) {
+            if (xhr.status !== 200) {
+                console.warn("2FA status check failed:", xhr.status);
+                return;
+            }
             if (data && data.enabled && !data.verified) {
                 show();
             }
